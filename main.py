@@ -208,9 +208,38 @@ async def telegram_send_with_keyboard(chat_id: str, message: str, keyboard: dict
         response.raise_for_status()
 
 
-async def notify_admin(message: str):
-    if ADMIN_CHAT_ID:
-        await telegram_send(ADMIN_CHAT_ID, message)
+async def notify_admin(message: str, case_id: int):
+    if not ADMIN_CHAT_ID or not BOT_TOKEN:
+        return
+    keyboard = {
+        "inline_keyboard": [[
+            {"text": "✅ Одобрить и опубликовать", "callback_data": f"case:publish:{case_id}"},
+            {"text": "❌ Отклонить", "callback_data": f"case:reject:{case_id}"}
+        ]]
+    }
+    await telegram_send_with_keyboard(ADMIN_CHAT_ID, message, keyboard)
+
+
+async def telegram_answer_callback(callback_id: str, text: str):
+    if not BOT_TOKEN:
+        return
+    async with httpx.AsyncClient(timeout=15) as client:
+        response = await client.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery",
+            json={"callback_query_id": callback_id, "text": text, "show_alert": True}
+        )
+        response.raise_for_status()
+
+
+async def telegram_edit_message(chat_id: str, message_id: int, text: str):
+    if not BOT_TOKEN:
+        return
+    async with httpx.AsyncClient(timeout=15) as client:
+        response = await client.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageText",
+            json={"chat_id": chat_id, "message_id": message_id, "text": text}
+        )
+        response.raise_for_status()
 
 
 @app.post("/telegram/webhook")
@@ -221,6 +250,41 @@ async def telegram_webhook(request: Request):
             raise HTTPException(status_code=403, detail="Invalid webhook secret")
 
     update = await request.json()
+
+    callback = update.get("callback_query")
+    if callback:
+        callback_id = callback.get("id", "")
+        callback_data = callback.get("data", "")
+        callback_message = callback.get("message", {})
+        callback_chat_id = str(callback_message.get("chat", {}).get("id", ""))
+        message_id = callback_message.get("message_id")
+        if callback_chat_id != str(ADMIN_CHAT_ID):
+            await telegram_answer_callback(callback_id, "Нет доступа.")
+            return {"ok": True}
+        parts = callback_data.split(":")
+        if len(parts) == 3 and parts[0] == "case" and parts[1] in ("publish", "reject") and parts[2].isdigit():
+            case_id = int(parts[2])
+            new_status = "published" if parts[1] == "publish" else "rejected"
+            with closing(db()) as con:
+                row = con.execute("SELECT animal_name,status FROM cases WHERE id=?", (case_id,)).fetchone()
+                if not row:
+                    await telegram_answer_callback(callback_id, "Заявка не найдена.")
+                    return {"ok": True}
+                if row["status"] != "pending":
+                    await telegram_answer_callback(callback_id, "Эта заявка уже обработана.")
+                    return {"ok": True}
+                con.execute("UPDATE cases SET status=? WHERE id=?", (new_status, case_id))
+                con.commit()
+            result_text = "опубликована на сайте" if new_status == "published" else "отклонена"
+            await telegram_answer_callback(callback_id, f"Заявка №{case_id} {result_text}.")
+            await telegram_edit_message(
+                callback_chat_id, message_id,
+                f"Заявка №{case_id} — {row['animal_name']}\\nСтатус: {result_text}."
+            )
+        else:
+            await telegram_answer_callback(callback_id, "Неизвестное действие.")
+        return {"ok": True}
+
     message = update.get("message", {})
     chat = message.get("chat", {})
     chat_id = chat.get("id")
