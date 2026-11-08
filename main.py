@@ -54,8 +54,23 @@ def init_db():
 
 
 @app.on_event("startup")
-def startup():
+async def startup():
     init_db()
+    public_url = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
+    if BOT_TOKEN and public_url:
+        webhook_url = public_url + "/telegram/webhook"
+        payload = {"url": webhook_url}
+        if WEBHOOK_SECRET:
+            payload["secret_token"] = WEBHOOK_SECRET
+        try:
+            async with httpx.AsyncClient(timeout=20) as client:
+                response = await client.post(
+                    f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
+                    json=payload
+                )
+                response.raise_for_status()
+        except Exception as exc:
+            print(f"Telegram webhook setup failed: {exc}")
 
 
 class AnimalCreate(BaseModel):
