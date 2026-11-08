@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#fff8f1">
+  <title>КОТОДОМ — каждому хвостику нужен дом</title>
+  <style>
+    :root{--ink:#29251f;--muted:#766f66;--orange:#f28b50;--cream:#fff8f1;--line:#eee3d8}
+    *{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:Arial,sans-serif}
+    header{padding:20px max(20px,calc((100% - 1080px)/2));display:flex;align-items:center;justify-content:space-between;background:#fff}
+    .brand{font-size:23px;font-weight:800;letter-spacing:1px}.brand span{color:var(--orange)}
+    nav a{color:var(--ink);text-decoration:none;margin-left:20px;font-size:14px}
+    main{max-width:1080px;margin:auto;padding:34px 20px 70px}
+    .hero{display:grid;grid-template-columns:1.2fr .8fr;gap:28px;align-items:center;padding:42px 0}
+    .eyebrow{color:#bd6b39;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:1.5px}
+    h1{font-size:clamp(38px,6vw,66px);line-height:1.02;margin:14px 0}
+    .lead{font-size:18px;line-height:1.6;color:var(--muted);max-width:550px}
+    .hero-art{background:#ffe5d2;border-radius:32px;min-height:280px;display:grid;place-items:center;font-size:130px}
+    .button{display:inline-block;border:0;border-radius:14px;background:var(--orange);color:white;padding:14px 20px;font-weight:700;text-decoration:none;cursor:pointer}
+    .section-head{display:flex;justify-content:space-between;align-items:end;gap:12px;margin:34px 0 18px}
+    h2{font-size:28px;margin:0 0 8px}.muted{color:var(--muted)}
+    .filters{display:flex;gap:10px;margin-bottom:18px}.filters input{max-width:300px}
+    input,textarea{width:100%;padding:13px;border:1px solid var(--line);border-radius:12px;font:inherit;background:#fff}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+    .animal{background:#fff;border:1px solid var(--line);border-radius:20px;overflow:hidden}
+    .photo{height:170px;background:#f8e6d8;display:grid;place-items:center;font-size:70px}
+    .animal-body{padding:16px}.animal h3{margin:0 0 6px}.animal p{color:var(--muted);line-height:1.45}
+    .tag{font-size:12px;color:#9a552d;background:#fff0e5;padding:6px 9px;border-radius:20px;display:inline-block}
+    .panel{margin-top:34px;padding:26px;background:#fff;border:1px solid var(--line);border-radius:22px}
+    form{display:grid;grid-template-columns:1fr 1fr;gap:12px}form textarea{grid-column:1/-1;min-height:90px}
+    form button{justify-self:start}#notice{color:#28754a;margin-top:10px}
+    footer{text-align:center;padding:28px;color:var(--muted);background:#fff}
+    @media(max-width:700px){nav{display:none}.hero{grid-template-columns:1fr;padding-top:20px}.hero-art{min-height:190px;font-size:95px}.grid{grid-template-columns:1fr}.section-head{display:block}form{grid-template-columns:1fr}form textarea{grid-column:auto}}
+  </style>
+</head>
+<body>
+<header><div class="brand">🐾 <span>КОТО</span>ДОМ</div><nav><a href="#animals">Найти друга</a><a href="#add">Добавить животное</a></nav></header>
+<main>
+  <section class="hero">
+    <div><div class="eyebrow">Помощь начинается с заботы</div><h1>Каждому хвостику нужен дом</h1><p class="lead">Находим заботливые семьи для котят и животных, объединяем волонтёров и людей, которые хотят помочь.</p><a class="button" href="#animals">Найти друга</a></div>
+    <div class="hero-art" aria-label="Котёнок">🐱</div>
+  </section>
+  <section id="animals">
+    <div class="section-head"><div><h2>Ищут дом</h2><div class="muted">Знакомьтесь с теми, кому нужна семья</div></div></div>
+    <div class="filters"><input id="city" placeholder="Фильтр по городу"><button class="button" onclick="loadAnimals()">Найти</button></div>
+    <div id="animalsGrid" class="grid"><p class="muted">Загружаем объявления…</p></div>
+  </section>
+  <section id="add" class="panel">
+    <h2>Помогите животному найти дом</h2><p class="muted">Расскажите о котёнке или животном. Публикация появится после отправки формы.</p>
+    <form id="animalForm">
+      <input name="name" placeholder="Кличка или «Без имени»" required>
+      <input name="city" placeholder="Город" required>
+      <input name="contact" placeholder="Контакт для связи (Telegram, телефон)" required>
+      <input name="photo_url" placeholder="Ссылка на фото (необязательно)">
+      <textarea name="description" placeholder="Возраст, характер и важная информация" required></textarea>
+      <button class="button" type="submit">Отправить объявление</button>
+    </form><div id="notice" role="status"></div>
+  </section>
+</main>
+<footer>КОТОДОМ · Вместе помогаем находить дом 🐾</footer>
+<script>
+async function loadAnimals(){
+  const city=document.getElementById('city').value.trim();
+  const url='/api/animals'+(city?'?city='+encodeURIComponent(city):'');
+  const grid=document.getElementById('animalsGrid');
+  try{
+    const response=await fetch(url);const animals=await response.json();
+    if(!animals.length){grid.innerHTML='<p class="muted">Пока объявлений нет. Вы можете добавить первое.</p>';return;}
+    grid.innerHTML=animals.map(a=>'<article class="animal"><div class="photo">'+(a.photo_url?'<img src="'+escapeHtml(a.photo_url)+'" alt="" style="width:100%;height:100%;object-fit:cover">':'🐈')+'</div><div class="animal-body"><span class="tag">'+escapeHtml(a.status)+'</span><h3>'+escapeHtml(a.name)+'</h3><div class="muted">📍 '+escapeHtml(a.city)+'</div><p>'+escapeHtml(a.description)+'</p><small class="muted">Связь: '+escapeHtml(a.contact)+'</small></div></article>').join('');
+  }catch(e){grid.innerHTML='<p class="muted">Не удалось загрузить объявления. Попробуйте позже.</p>';}
+}
+function escapeHtml(value){return String(value||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+document.getElementById('animalForm').addEventListener('submit',async e=>{
+  e.preventDefault();const form=e.currentTarget;const data=Object.fromEntries(new FormData(form).entries());
+  try{const r=await fetch('/api/animals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const result=await r.json();if(!r.ok)throw new Error(result.detail||'Ошибка отправки');document.getElementById('notice').textContent='Спасибо! Объявление добавлено.';form.reset();loadAnimals();}
+  catch(err){document.getElementById('notice').textContent='Не получилось отправить. Проверьте данные и попробуйте ещё раз.';}
+});
+loadAnimals();
+</script>
+</body>
+</html>
