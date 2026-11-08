@@ -3,78 +3,109 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#fff8f1">
-  <title>КОТОДОМ — каждому хвостику нужен дом</title>
+  <meta name="theme-color" content="#f5f9ff">
+  <meta name="description" content="КОТОДОМ — помогаем животным найти любящую семью. Ищите питомцев, публикуйте объявления и помогайте волонтёрам.">
+  <title>КОТОДОМ — дом начинается с любви</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    :root{--ink:#29251f;--muted:#766f66;--orange:#f28b50;--cream:#fff8f1;--line:#eee3d8}
-    *{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:Arial,sans-serif}
-    header{padding:20px max(20px,calc((100% - 1080px)/2));display:flex;align-items:center;justify-content:space-between;background:#fff}
-    .brand{font-size:23px;font-weight:800;letter-spacing:1px}.brand span{color:var(--orange)}
-    nav a{color:var(--ink);text-decoration:none;margin-left:20px;font-size:14px}
-    main{max-width:1080px;margin:auto;padding:34px 20px 70px}
-    .hero{display:grid;grid-template-columns:1.2fr .8fr;gap:28px;align-items:center;padding:42px 0}
-    .eyebrow{color:#bd6b39;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:1.5px}
-    h1{font-size:clamp(38px,6vw,66px);line-height:1.02;margin:14px 0}
-    .lead{font-size:18px;line-height:1.6;color:var(--muted);max-width:550px}
-    .hero-art{background:#ffe5d2;border-radius:32px;min-height:280px;display:grid;place-items:center;font-size:130px}
-    .button{display:inline-block;border:0;border-radius:14px;background:var(--orange);color:white;padding:14px 20px;font-weight:700;text-decoration:none;cursor:pointer}
-    .section-head{display:flex;justify-content:space-between;align-items:end;gap:12px;margin:34px 0 18px}
-    h2{font-size:28px;margin:0 0 8px}.muted{color:var(--muted)}
-    .filters{display:flex;gap:10px;margin-bottom:18px}.filters input{max-width:300px}
-    input,textarea{width:100%;padding:13px;border:1px solid var(--line);border-radius:12px;font:inherit;background:#fff}
-    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-    .animal{background:#fff;border:1px solid var(--line);border-radius:20px;overflow:hidden}
-    .photo{height:170px;background:#f8e6d8;display:grid;place-items:center;font-size:70px}
-    .animal-body{padding:16px}.animal h3{margin:0 0 6px}.animal p{color:var(--muted);line-height:1.45}
-    .tag{font-size:12px;color:#9a552d;background:#fff0e5;padding:6px 9px;border-radius:20px;display:inline-block}
-    .panel{margin-top:34px;padding:26px;background:#fff;border:1px solid var(--line);border-radius:22px}
-    form{display:grid;grid-template-columns:1fr 1fr;gap:12px}form textarea{grid-column:1/-1;min-height:90px}
-    form button{justify-self:start}#notice{color:#28754a;margin-top:10px}
-    footer{text-align:center;padding:28px;color:var(--muted);background:#fff}
-    @media(max-width:700px){nav{display:none}.hero{grid-template-columns:1fr;padding-top:20px}.hero-art{min-height:190px;font-size:95px}.grid{grid-template-columns:1fr}.section-head{display:block}form{grid-template-columns:1fr}form textarea{grid-column:auto}}
+    :root{--navy:#102b50;--blue:#2463eb;--blue2:#4b83f5;--sky:#eaf2ff;--pale:#f5f9ff;--ink:#172b49;--muted:#6c7d96;--line:#e3ebf6;--white:#fff;--shadow:0 18px 55px rgba(30,72,132,.10);--radius:24px}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--pale);color:var(--ink);font-family:'DM Sans',Arial,sans-serif;-webkit-font-smoothing:antialiased}
+    a{color:inherit;text-decoration:none}button,input,textarea{font:inherit}.wrap{width:min(1160px,calc(100% - 40px));margin:auto}
+    .topbar{height:78px;display:flex;align-items:center;justify-content:space-between;gap:24px}.brand{display:flex;align-items:center;gap:10px;font-family:Manrope,sans-serif;font-weight:800;font-size:22px;letter-spacing:-.8px;color:var(--navy)}.brand-mark{width:40px;height:40px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(145deg,#3477f6,#174fc7);color:white;font-size:21px;box-shadow:0 8px 18px #2463eb35}.brand span{color:var(--blue)}
+    nav{display:flex;align-items:center;gap:30px;color:#536781;font-size:14px;font-weight:600}nav a:hover{color:var(--blue)}.nav-cta{padding:12px 18px;border-radius:12px;background:var(--blue);color:#fff;box-shadow:0 8px 18px #2463eb2c}.nav-cta:hover{background:#174fc7;color:white}
+    .hero{position:relative;overflow:hidden;margin:18px auto 0;padding:66px 66px 58px;border-radius:34px;background:linear-gradient(115deg,#102b50 0%,#174a91 58%,#2868d8 100%);color:#fff;display:grid;grid-template-columns:1.08fr .92fr;align-items:center;min-height:430px;box-shadow:0 24px 65px #153f7b26}.hero:before,.hero:after{content:"";position:absolute;border:1px solid #ffffff17;border-radius:50%;pointer-events:none}.hero:before{width:440px;height:440px;right:-100px;top:-190px}.hero:after{width:300px;height:300px;right:5px;bottom:-210px}
+    .hero-copy{position:relative;z-index:1}.eyebrow{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:30px;background:#ffffff17;color:#dceaff;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase}.eyebrow i{width:7px;height:7px;border-radius:50%;background:#8fd2ff;box-shadow:0 0 0 4px #8fd2ff24}
+    h1,h2,h3,p{margin-top:0}h1{font-family:Manrope,sans-serif;font-size:clamp(40px,5vw,64px);line-height:1.04;letter-spacing:-2.6px;margin:22px 0 18px;max-width:590px}.hero p{font-size:17px;line-height:1.7;color:#d4e3fa;max-width:500px;margin-bottom:28px}.actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;border:0;border-radius:13px;padding:14px 20px;font-weight:700;cursor:pointer;transition:.2s transform,.2s background}.btn:hover{transform:translateY(-2px)}.btn-primary{background:#fff;color:#174b9a;box-shadow:0 10px 25px #061d3e30}.btn-ghost{background:#ffffff14;color:#fff;border:1px solid #ffffff38}.hero-visual{position:relative;z-index:1;display:flex;justify-content:center;align-items:center;min-height:280px}.pet-orbit{width:min(320px,100%);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 35% 28%,#fff 0%,#dbeaff 48%,#9ec3ff 100%);display:grid;place-items:center;box-shadow:0 25px 70px #061d3e55;position:relative}.pet-orbit:before{content:"";position:absolute;inset:18px;border:1px solid #fff9;border-radius:50%}.pet-emoji{font-size:clamp(130px,18vw,190px);filter:drop-shadow(0 18px 12px #173d7030);transform:translateY(8px)}.float-note{position:absolute;right:-8px;bottom:25px;background:#fff;color:var(--navy);border-radius:16px;padding:13px 16px;box-shadow:var(--shadow);font-size:12px;font-weight:700}.float-note strong{display:block;font-size:17px;color:var(--blue);margin-bottom:2px}
+    .trust-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:20px 0 66px}.trust{display:flex;align-items:center;gap:13px;padding:18px 20px;background:#fff;border:1px solid var(--line);border-radius:18px}.trust-icon{width:42px;height:42px;display:grid;place-items:center;border-radius:13px;background:var(--sky);font-size:20px}.trust strong{display:block;font-size:14px}.trust small{display:block;color:var(--muted);font-size:12px;margin-top:3px}
+    section.content-section{padding:12px 0 64px}.section-head{display:flex;align-items:end;justify-content:space-between;gap:18px;margin-bottom:24px}.kicker{color:var(--blue);font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:9px}.section-head h2,.form-copy h2{font-family:Manrope,sans-serif;font-size:clamp(27px,3vw,36px);letter-spacing:-1.2px;color:var(--navy);margin-bottom:7px}.section-head p,.form-copy p{color:var(--muted);line-height:1.6;margin:0}.count-pill{padding:9px 13px;background:#e8f0ff;color:#285ab0;border-radius:30px;font-size:12px;font-weight:700;white-space:nowrap}
+    .searchbar{display:flex;gap:10px;padding:10px;background:#fff;border:1px solid var(--line);border-radius:17px;box-shadow:0 8px 28px #173f7910;margin-bottom:22px}.searchfield{display:flex;align-items:center;gap:10px;flex:1;padding:0 10px}.searchfield span{font-size:18px}.searchfield input{border:0;outline:0;width:100%;min-width:0;padding:10px 0;color:var(--ink);background:transparent}.searchbar .btn{padding:12px 22px;background:var(--blue);color:#fff}
+    .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}.animal{overflow:hidden;background:#fff;border:1px solid var(--line);border-radius:21px;transition:.22s;box-shadow:0 8px 24px #173f7908}.animal:hover{transform:translateY(-4px);box-shadow:var(--shadow)}.photo{height:210px;position:relative;overflow:hidden;background:linear-gradient(135deg,#e9f2ff,#d4e5ff);display:grid;place-items:center}.photo img{width:100%;height:100%;object-fit:cover}.photo-fallback{font-size:76px}.animal-body{padding:19px}.animal-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}.tag{font-size:11px;font-weight:700;color:#1d5bc2;background:#eaf2ff;padding:7px 10px;border-radius:30px}.city{font-size:12px;color:var(--muted)}.animal h3{font-family:Manrope,sans-serif;font-size:20px;color:var(--navy);margin:0 0 8px}.animal p{font-size:13px;line-height:1.6;color:var(--muted);margin:0 0 16px;min-height:42px}.animal-contact{border-top:1px solid var(--line);padding-top:13px;font-size:12px;color:#526781;overflow-wrap:anywhere}.empty{grid-column:1/-1;padding:45px 20px;text-align:center;border:1px dashed #c8d7eb;border-radius:20px;background:#fff;color:var(--muted)}.empty b{display:block;color:var(--navy);font-size:18px;margin-bottom:7px}
+    .help-banner{display:grid;grid-template-columns:1fr auto;align-items:center;gap:25px;padding:32px 36px;margin:4px 0 66px;border-radius:24px;background:linear-gradient(110deg,#eaf2ff,#f5f9ff);border:1px solid #dce8fb}.help-banner h3{font-family:Manrope,sans-serif;color:var(--navy);font-size:22px;margin:0 0 7px}.help-banner p{margin:0;color:var(--muted);font-size:14px;line-height:1.5}.help-banner .btn{background:var(--blue);color:#fff}
+    .form-panel{display:grid;grid-template-columns:.8fr 1.2fr;gap:38px;padding:38px;background:#fff;border:1px solid var(--line);border-radius:27px;box-shadow:var(--shadow);margin-bottom:70px}.form-copy{padding:12px 0}.form-symbol{width:54px;height:54px;display:grid;place-items:center;border-radius:17px;background:var(--sky);font-size:26px;margin-bottom:20px}.form-copy p{font-size:14px}.form-copy .hint{margin-top:18px;padding:13px 15px;border-radius:13px;background:#f5f8fd;color:#6a7b92;font-size:12px;line-height:1.55}
+    form{display:grid;grid-template-columns:1fr 1fr;gap:13px}label{display:block;font-size:12px;font-weight:700;color:#435874}label input,label textarea{display:block;margin-top:7px;width:100%;border:1px solid #dfe7f2;border-radius:12px;padding:13px 14px;background:#fbfdff;outline:none;color:var(--ink);font-size:14px}label input:focus,label textarea:focus{border-color:#79a4f5;box-shadow:0 0 0 3px #2463eb14}label.full{grid-column:1/-1}textarea{resize:vertical;min-height:95px}form .btn{justify-self:start;background:var(--blue);color:#fff}#notice{grid-column:1/-1;color:#1c7a50;font-size:13px;min-height:18px}
+    footer{background:#102b50;color:#d7e5f9;padding:32px 0}footer .foot-inner{display:flex;justify-content:space-between;gap:20px;align-items:center}footer .brand{color:#fff}footer p{font-size:12px;color:#9fb5d4;margin:8px 0 0}footer small{color:#9fb5d4}
+    @media(max-width:800px){.hero{padding:48px 36px;grid-template-columns:1fr .75fr}.trust-row{margin-bottom:45px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.form-panel{grid-template-columns:1fr;gap:20px;padding:28px}.form-copy{padding:0}}
+    @media(max-width:620px){.wrap{width:min(100% - 28px,1160px)}.topbar{height:68px}.brand{font-size:19px}.brand-mark{width:36px;height:36px}nav{display:none}.hero{margin-top:8px;padding:35px 24px 28px;border-radius:25px;grid-template-columns:1fr;min-height:0}.hero h1{font-size:43px;letter-spacing:-1.8px}.hero p{font-size:15px}.hero-visual{min-height:210px;margin-top:8px}.pet-orbit{width:210px}.pet-emoji{font-size:130px}.float-note{right:0;bottom:8px}.trust-row{grid-template-columns:1fr;gap:9px;margin:14px 0 38px}.trust{padding:13px 15px}.section-head{align-items:start}.section-head h2{font-size:28px}.count-pill{font-size:10px}.searchbar{gap:5px}.searchbar .btn{padding:11px 13px}.grid{grid-template-columns:1fr;gap:14px}.photo{height:220px}.help-banner{grid-template-columns:1fr;padding:25px;margin-bottom:45px}.help-banner .btn{justify-self:start}.form-panel{padding:22px;border-radius:22px;margin-bottom:45px}form{grid-template-columns:1fr}label.full{grid-column:auto}#notice{grid-column:auto}footer .foot-inner{align-items:flex-start;flex-direction:column}}
   </style>
 </head>
 <body>
-<header><div class="brand">🐾 <span>КОТО</span>ДОМ</div><nav><a href="#animals">Найти друга</a><a href="#add">Добавить животное</a></nav></header>
-<main>
+<header class="wrap topbar">
+  <a class="brand" href="#"><span class="brand-mark">🐾</span> КОТО<span>ДОМ</span></a>
+  <nav aria-label="Основная навигация"><a href="#animals">Найти питомца</a><a href="#how">Как помочь</a><a href="#add">Разместить объявление</a><a class="nav-cta" href="#animals">Найти друга&nbsp; ↗</a></nav>
+</header>
+<main class="wrap">
   <section class="hero">
-    <div><div class="eyebrow">Помощь начинается с заботы</div><h1>Каждому хвостику нужен дом</h1><p class="lead">Находим заботливые семьи для котят и животных, объединяем волонтёров и людей, которые хотят помочь.</p><a class="button" href="#animals">Найти друга</a></div>
-    <div class="hero-art" aria-label="Котёнок">🐱</div>
+    <div class="hero-copy">
+      <div class="eyebrow"><i></i> Пространство добрых историй</div>
+      <h1>У каждого хвостика есть свой человек.</h1>
+      <p>Помогаем бездомным животным встретить заботливую семью. Здесь начинается история вашей дружбы.</p>
+      <div class="actions"><a class="btn btn-primary" href="#animals">Найти своего друга <span>→</span></a><a class="btn btn-ghost" href="#add">Помочь животному</a></div>
+    </div>
+    <div class="hero-visual" aria-label="Иллюстрация котёнка">
+      <div class="pet-orbit"><div class="pet-emoji">🐱</div></div>
+      <div class="float-note"><strong>Один добрый шаг</strong>может изменить жизнь</div>
+    </div>
   </section>
-  <section id="animals">
-    <div class="section-head"><div><h2>Ищут дом</h2><div class="muted">Знакомьтесь с теми, кому нужна семья</div></div></div>
-    <div class="filters"><input id="city" placeholder="Фильтр по городу"><button class="button" onclick="loadAnimals()">Найти</button></div>
-    <div id="animalsGrid" class="grid"><p class="muted">Загружаем объявления…</p></div>
+
+  <div class="trust-row" id="how">
+    <div class="trust"><div class="trust-icon">🏡</div><div><strong>Дом для каждого</strong><small>Помогаем найти семью</small></div></div>
+    <div class="trust"><div class="trust-icon">🤝</div><div><strong>Вместе сильнее</strong><small>Объединяем людей и волонтёров</small></div></div>
+    <div class="trust"><div class="trust-icon">💙</div><div><strong>Забота и внимание</strong><small>Каждая история важна</small></div></div>
+  </div>
+
+  <section class="content-section" id="animals">
+    <div class="section-head"><div><div class="kicker">Они ждут именно тебя</div><h2>Друзья в поисках дома</h2><p>Познакомьтесь с теми, кому нужна семья.</p></div><span class="count-pill" id="animalCount">Загрузка...</span></div>
+    <div class="searchbar"><div class="searchfield"><span>⌕</span><input id="city" type="search" placeholder="В каком городе ищем?" aria-label="Поиск по городу"></div><button class="btn" type="button" onclick="loadAnimals()">Найти</button></div>
+    <div id="animalsGrid" class="grid" aria-live="polite"><div class="empty">Загружаем анкеты питомцев…</div></div>
   </section>
-  <section id="add" class="panel">
-    <h2>Помогите животному найти дом</h2><p class="muted">Расскажите о котёнке или животном. Публикация появится после отправки формы.</p>
+
+  <section class="help-banner">
+    <div><h3>Не можете забрать домой? Вы всё равно можете помочь.</h3><p>Расскажите о проекте друзьям или помогите разместить анкету животного.</p></div>
+    <a class="btn" href="#add">Разместить анкету&nbsp; →</a>
+  </section>
+
+  <section class="form-panel" id="add">
+    <div class="form-copy">
+      <div class="form-symbol">🐾</div><div class="kicker">Каждая анкета — шанс</div>
+      <h2>Помогите найти дорогу домой</h2>
+      <p>Расскажите о животном, которое ищет семью. Добавьте описание и контакт для связи — так люди смогут узнать о нём больше.</p>
+      <div class="hint">Пожалуйста, указывайте только актуальную информацию и контакт, по которому с вами можно безопасно связаться.</div>
+    </div>
     <form id="animalForm">
-      <input name="name" placeholder="Кличка или «Без имени»" required>
-      <input name="city" placeholder="Город" required>
-      <input name="contact" placeholder="Контакт для связи (Telegram, телефон)" required>
-      <input name="photo_url" placeholder="Ссылка на фото (необязательно)">
-      <textarea name="description" placeholder="Возраст, характер и важная информация" required></textarea>
-      <button class="button" type="submit">Отправить объявление</button>
-    </form><div id="notice" role="status"></div>
+      <label>Кличка<input name="name" placeholder="Например, Снежок" required maxlength="60"></label>
+      <label>Город<input name="city" placeholder="Ваш город" required maxlength="100"></label>
+      <label>Контакт для связи<input name="contact" placeholder="Telegram или телефон" required maxlength="150"></label>
+      <label>Ссылка на фото<input name="photo_url" type="url" placeholder="https://... (необязательно" maxlength="500"></label>
+      <label class="full">История и описание<textarea name="description" placeholder="Возраст, характер, особенности и какая помощь нужна…" required minlength="5" maxlength="1500"></textarea></label>
+      <button class="btn" type="submit">Отправить анкету&nbsp; →</button><div id="notice" role="status"></div>
+    </form>
   </section>
 </main>
-<footer>КОТОДОМ · Вместе помогаем находить дом 🐾</footer>
+<footer><div class="wrap foot-inner"><div><a class="brand" href="#"><span class="brand-mark">🐾</span> КОТО<span>ДОМ</span></a><p>Больше заботы. Больше счастливых историй.</p></div><small>© КОТОДОМ · Сделано с заботой о животных</small></div></footer>
 <script>
+const grid=document.getElementById('animalsGrid');
+function escapeHtml(value){return String(value||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 async function loadAnimals(){
   const city=document.getElementById('city').value.trim();
   const url='/api/animals'+(city?'?city='+encodeURIComponent(city):'');
-  const grid=document.getElementById('animalsGrid');
+  grid.innerHTML='<div class="empty">Загружаем анкеты питомцев…</div>';
   try{
-    const response=await fetch(url);const animals=await response.json();
-    if(!animals.length){grid.innerHTML='<p class="muted">Пока объявлений нет. Вы можете добавить первое.</p>';return;}
-    grid.innerHTML=animals.map(a=>'<article class="animal"><div class="photo">'+(a.photo_url?'<img src="'+escapeHtml(a.photo_url)+'" alt="" style="width:100%;height:100%;object-fit:cover">':'🐈')+'</div><div class="animal-body"><span class="tag">'+escapeHtml(a.status)+'</span><h3>'+escapeHtml(a.name)+'</h3><div class="muted">📍 '+escapeHtml(a.city)+'</div><p>'+escapeHtml(a.description)+'</p><small class="muted">Связь: '+escapeHtml(a.contact)+'</small></div></article>').join('');
-  }catch(e){grid.innerHTML='<p class="muted">Не удалось загрузить объявления. Попробуйте позже.</p>';}
+    const response=await fetch(url);if(!response.ok)throw new Error('Не удалось загрузить');
+    const animals=await response.json();
+    document.getElementById('animalCount').textContent=animals.length+' '+(animals.length===1?'анкета':animals.length>1&&animals.length<5?'анкеты':'анкет');
+    if(!animals.length){grid.innerHTML='<div class="empty"><b>Пока здесь тихо</b>Анкет пока нет. Вы можете помочь и добавить первую историю.</div>';return;}
+    grid.innerHTML=animals.map(a=>'<article class="animal"><div class="photo">'+(a.photo_url?'<img src="'+escapeHtml(a.photo_url)+'" alt="Фото: '+escapeHtml(a.name)+'" loading="lazy" onerror="this.outerHTML=\'<span class=&quot;photo-fallback&quot;>🐈</span>\'">':'<span class="photo-fallback">🐈</span>')+'</div><div class="animal-body"><div class="animal-top"><span class="tag">'+escapeHtml(a.status||'Ищет дом')+'</span><span class="city">⌖ '+escapeHtml(a.city)+'</span></div><h3>'+escapeHtml(a.name)+'</h3><p>'+escapeHtml(a.description)+'</p><div class="animal-contact">Связаться: '+escapeHtml(a.contact)+'</div></div></article>').join('');
+  }catch(e){document.getElementById('animalCount').textContent='';grid.innerHTML='<div class="empty"><b>Не получилось загрузить анкеты</b>Попробуйте обновить страницу чуть позже.</div>';}
 }
-function escapeHtml(value){return String(value||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+document.getElementById('city').addEventListener('keydown',e=>{if(e.key==='Enter')loadAnimals();});
 document.getElementById('animalForm').addEventListener('submit',async e=>{
-  e.preventDefault();const form=e.currentTarget;const data=Object.fromEntries(new FormData(form).entries());
-  try{const r=await fetch('/api/animals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const result=await r.json();if(!r.ok)throw new Error(result.detail||'Ошибка отправки');document.getElementById('notice').textContent='Спасибо! Объявление добавлено.';form.reset();loadAnimals();}
-  catch(err){document.getElementById('notice').textContent='Не получилось отправить. Проверьте данные и попробуйте ещё раз.';}
+  e.preventDefault();const form=e.currentTarget;const button=form.querySelector('button[type="submit"]');const notice=document.getElementById('notice');const data=Object.fromEntries(new FormData(form).entries());
+  button.disabled=true;button.textContent='Отправляем…';notice.textContent='';
+  try{const r=await fetch('/api/animals',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const result=await r.json();if(!r.ok)throw new Error(result.detail||'Ошибка отправки');notice.textContent='Спасибо! Анкета добавлена.';form.reset();await loadAnimals();}
+  catch(err){notice.textContent='Не получилось отправить анкету. Проверьте данные и попробуйте ещё раз.';}
+  finally{button.disabled=false;button.textContent='Отправить анкету →';}
 });
 loadAnimals();
 </script>
