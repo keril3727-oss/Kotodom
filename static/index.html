@@ -33,14 +33,14 @@
 <body>
 <header class="wrap topbar">
   <a class="brand" href="#"><span class="brand-mark">🐾</span> КОТО<span>ДОМ</span></a>
-  <nav aria-label="Основная навигация"><a href="#animals">Найти питомца</a><a href="#how">Как помочь</a><a href="#add">Разместить объявление</a><a class="nav-cta" href="#animals">Найти друга&nbsp; ↗</a></nav>
+  <nav aria-label="Основная навигация"><a href="#animals">Найти питомца</a><a href="#how">Как помочь</a><a href="#partners">Партнёрам</a><a href="#add">Разместить анкету</a><a class="nav-cta" href="#animals">Найти друга&nbsp; ↗</a></nav>
 </header>
 <main class="wrap">
   <section class="hero">
     <div class="hero-copy">
       <div class="eyebrow"><i></i> Пространство добрых историй</div>
       <h1>У каждого хвостика есть свой человек.</h1>
-      <p>Помогаем бездомным животным встретить заботливую семью. Здесь начинается история вашей дружбы.</p>
+      <p>Объединяем людей, приюты и волонтёров в России и Беларуси, чтобы у каждого котика появился шанс найти дом.</p>
       <div class="actions"><a class="btn btn-primary" href="#animals">Найти своего друга <span>→</span></a><a class="btn btn-ghost" href="#add">Помочь животному</a></div>
     </div>
     <div class="hero-visual" aria-label="Иллюстрация котёнка">
@@ -57,16 +57,16 @@
 
   <section class="content-section" id="animals">
     <div class="section-head"><div><div class="kicker">Они ждут именно тебя</div><h2>Друзья в поисках дома</h2><p>Познакомьтесь с теми, кому нужна семья.</p></div><span class="count-pill" id="animalCount">Загрузка...</span></div>
-    <div class="searchbar"><div class="searchfield"><span>⌕</span><input id="city" type="search" placeholder="В каком городе ищем?" aria-label="Поиск по городу"></div><button class="btn" type="button" onclick="loadAnimals()">Найти</button></div>
+    <div class="searchbar"><select id="country" aria-label="Страна" style="border:1px solid #e3ebf6;border-radius:12px;padding:0 12px;background:#fbfdff;color:#172b49"><option value="">Россия и Беларусь</option><option value="Россия">Россия</option><option value="Беларусь">Беларусь</option></select><div class="searchfield"><span>⌕</span><input id="city" type="search" placeholder="Город (необязательно)" aria-label="Поиск по городу"></div><button class="btn" type="button" onclick="loadAnimals()">Найти</button></div>
     <div id="animalsGrid" class="grid" aria-live="polite"><div class="empty">Загружаем анкеты питомцев…</div></div>
   </section>
 
-  <section class="help-banner">
-    <div><h3>Не можете забрать домой? Вы всё равно можете помочь.</h3><p>Расскажите о проекте друзьям или помогите разместить анкету животного.</p></div>
+  <section class="help-banner" id="help">
+    <div><h3>Не можете забрать домой? Вы всё равно можете помочь.</h3><p>Станьте информационным волонтёром, помогите с кормом или передержкой, поделитесь анкетой с друзьями.</p></div>
     <a class="btn" href="#add">Разместить анкету&nbsp; →</a>
   </section>
 
-  <section class="form-panel" id="add">
+  <section class="content-section" id="partners"><div class="section-head"><div><div class="kicker">Вместе можем больше</div><h2>Для приютов и партнёров</h2><p>Приюты и волонтёры могут бесплатно публиковать анкеты. Зоомагазины и бренды могут поддержать проект товарами, специальными предложениями или рекламным партнёрством.</p></div></div><div class="trust-row" style="margin:0 0 35px"><div class="trust"><div class="trust-icon">🏠</div><div><strong>Приютам</strong><small>Бесплатное размещение животных</small></div></div><div class="trust"><div class="trust-icon">🛍️</div><div><strong>Зообизнесу</strong><small>Партнёрские предложения и реклама</small></div></div><div class="trust"><div class="trust-icon">💙</div><div><strong>Прозрачная помощь</strong><small>Понятно, кому и на что помогают</small></div></div></div></section><section class="form-panel" id="add">
     <div class="form-copy">
       <div class="form-symbol">🐾</div><div class="kicker">Каждая анкета — шанс</div>
       <h2>Помогите найти дорогу домой</h2>
@@ -75,7 +75,7 @@
     </div>
     <form id="animalForm">
       <label>Кличка<input name="name" placeholder="Например, Снежок" required maxlength="60"></label>
-      <label>Город<input name="city" placeholder="Ваш город" required maxlength="100"></label>
+      <label>Страна<select name="country" required><option value="Россия">Россия</option><option value="Беларусь">Беларусь</option></select></label><label>Город<input name="city" placeholder="Ваш город" required maxlength="100"></label>
       <label>Контакт для связи<input name="contact" placeholder="Telegram или телефон" required maxlength="150"></label>
       <label>Ссылка на фото<input name="photo_url" type="url" placeholder="https://... (необязательно" maxlength="500"></label>
       <label class="full">История и описание<textarea name="description" placeholder="Возраст, характер, особенности и какая помощь нужна…" required minlength="5" maxlength="1500"></textarea></label>
@@ -89,17 +89,20 @@ const grid=document.getElementById('animalsGrid');
 function escapeHtml(value){return String(value||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 async function loadAnimals(){
   const city=document.getElementById('city').value.trim();
-  const url='/api/animals'+(city?'?city='+encodeURIComponent(city):'');
+  const country=document.getElementById('country').value;
+  const params=new URLSearchParams();if(city)params.set('city',city);if(country)params.set('country',country);
+  const url='/api/animals'+(params.toString()?'?'+params.toString():'');
   grid.innerHTML='<div class="empty">Загружаем анкеты питомцев…</div>';
   try{
     const response=await fetch(url);if(!response.ok)throw new Error('Не удалось загрузить');
     const animals=await response.json();
     document.getElementById('animalCount').textContent=animals.length+' '+(animals.length===1?'анкета':animals.length>1&&animals.length<5?'анкеты':'анкет');
     if(!animals.length){grid.innerHTML='<div class="empty"><b>Пока здесь тихо</b>Анкет пока нет. Вы можете помочь и добавить первую историю.</div>';return;}
-    grid.innerHTML=animals.map(a=>'<article class="animal"><div class="photo">'+(a.photo_url?'<img src="'+escapeHtml(a.photo_url)+'" alt="Фото: '+escapeHtml(a.name)+'" loading="lazy" onerror="this.outerHTML=\'<span class=&quot;photo-fallback&quot;>🐈</span>\'">':'<span class="photo-fallback">🐈</span>')+'</div><div class="animal-body"><div class="animal-top"><span class="tag">'+escapeHtml(a.status||'Ищет дом')+'</span><span class="city">⌖ '+escapeHtml(a.city)+'</span></div><h3>'+escapeHtml(a.name)+'</h3><p>'+escapeHtml(a.description)+'</p><div class="animal-contact">Связаться: '+escapeHtml(a.contact)+'</div></div></article>').join('');
+    grid.innerHTML=animals.map(a=>'<article class="animal"><div class="photo">'+(a.photo_url?'<img src="'+escapeHtml(a.photo_url)+'" alt="Фото: '+escapeHtml(a.name)+'" loading="lazy" onerror="this.outerHTML=\'<span class=&quot;photo-fallback&quot;>🐈</span>\'">':'<span class="photo-fallback">🐈</span>')+'</div><div class="animal-body"><div class="animal-top"><span class="tag">'+escapeHtml(a.status||'Ищет дом')+'</span><span class="city">⌖ '+escapeHtml(a.city)+' · '+escapeHtml(a.country||'Россия')+'</span></div><h3>'+escapeHtml(a.name)+'</h3><p>'+escapeHtml(a.description)+'</p><div class="animal-contact">Связаться: '+escapeHtml(a.contact)+'</div></div></article>').join('');
   }catch(e){document.getElementById('animalCount').textContent='';grid.innerHTML='<div class="empty"><b>Не получилось загрузить анкеты</b>Попробуйте обновить страницу чуть позже.</div>';}
 }
 document.getElementById('city').addEventListener('keydown',e=>{if(e.key==='Enter')loadAnimals();});
+document.getElementById('country').addEventListener('change',loadAnimals);
 document.getElementById('animalForm').addEventListener('submit',async e=>{
   e.preventDefault();const form=e.currentTarget;const button=form.querySelector('button[type="submit"]');const notice=document.getElementById('notice');const data=Object.fromEntries(new FormData(form).entries());
   button.disabled=true;button.textContent='Отправляем…';notice.textContent='';
