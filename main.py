@@ -142,12 +142,17 @@ async def create_case(case: CaseCreate):
               case.photo_url, case.contact))
         con.commit()
         case_id = cur.lastrowid
-    await notify_admin(
-        "Новая заявка КОТОДОМ №{}\nЖивотное: {}\nНужда: {}\nГород: {}, {}\nСумма: {} {}\nКонтакт: {}\nИстория: {}".format(
-            case_id, case.animal_name, case.need_type, case.city, case.country,
-            case.target_amount, case.currency, case.contact, case.story[:700]
+    try:
+        await notify_admin(
+            "Новая заявка КОТОДОМ №{}\nЖивотное: {}\nНужда: {}\nГород: {}, {}\nСумма: {} {}\nКонтакт: {}\nИстория: {}".format(
+                case_id, case.animal_name, case.need_type, case.city, case.country,
+                case.target_amount, case.currency, case.contact, case.story[:700]
+            ),
+            case_id
         )
-    )
+    except Exception as exc:
+        # Не ломаем приём заявки, если Telegram временно недоступен.
+        print(f"Admin notification failed for case {case_id}: {exc}")
     return {"ok": True, "id": case_id, "status": "pending",
             "message": "Заявка принята на проверку. Сбор появится после подтверждения документов."}
 
