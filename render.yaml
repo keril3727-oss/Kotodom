@@ -17,3 +17,5 @@ services:
         generateValue: true
       - key: ADMIN_CHAT_ID
         sync: false
+      - key: DATABASE_URL
+        sync: false
