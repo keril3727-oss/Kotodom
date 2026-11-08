@@ -213,6 +213,10 @@ async def telegram_webhook(request: Request):
     if not chat_id or not incoming:
         return {"ok": True}
 
+    if incoming in ("/myid", "/id"):
+        await telegram_send(str(chat_id), f"Ваш Telegram ID для уведомлений КОТОДОМ: {chat_id}")
+        return {"ok": True}
+
     if incoming in ("/cancel", "Отмена"):
         with closing(db()) as con:
             con.execute("DELETE FROM bot_drafts WHERE chat_id=?", (chat_id,))
