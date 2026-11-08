@@ -39,6 +39,9 @@ def init_db():
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        columns = {row["name"] for row in con.execute("PRAGMA table_info(animals)").fetchall()}
+        if "country" not in columns:
+            con.execute("ALTER TABLE animals ADD COLUMN country TEXT NOT NULL DEFAULT 'Россия'")
         con.execute("""
             CREATE TABLE IF NOT EXISTS applications (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,6 +82,7 @@ class AnimalCreate(BaseModel):
     description: str = Field(min_length=5, max_length=1500)
     photo_url: str = Field(default="", max_length=500)
     contact: str = Field(min_length=3, max_length=150)
+    country: str = Field(default="Россия", pattern="^(Россия|Беларусь)$")
 
 
 class ApplicationCreate(BaseModel):
@@ -99,15 +103,17 @@ def health():
 
 
 @app.get("/api/animals")
-def list_animals(city: Optional[str] = None):
+def list_animals(city: Optional[str] = None, country: Optional[str] = None):
     with closing(db()) as con:
+        query = "SELECT * FROM animals WHERE 1=1"
+        params = []
         if city:
-            rows = con.execute(
-                "SELECT * FROM animals WHERE city LIKE ? ORDER BY id DESC",
-                (f"%{city}%",)
-            ).fetchall()
-        else:
-            rows = con.execute("SELECT * FROM animals ORDER BY id DESC").fetchall()
+            query += " AND city LIKE ?"
+            params.append(f"%{city}%")
+        if country in ("Россия", "Беларусь"):
+            query += " AND country = ?"
+            params.append(country)
+        rows = con.execute(query + " ORDER BY id DESC", params).fetchall()
     return [dict(row) for row in rows]
 
 
@@ -115,9 +121,9 @@ def list_animals(city: Optional[str] = None):
 def create_animal(animal: AnimalCreate):
     with closing(db()) as con:
         cursor = con.execute(
-            """INSERT INTO animals (name, city, description, photo_url, contact)
-               VALUES (?, ?, ?, ?, ?)""",
-            (animal.name, animal.city, animal.description, animal.photo_url, animal.contact)
+            """INSERT INTO animals (name, city, description, photo_url, contact, country)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (animal.name, animal.city, animal.description, animal.photo_url, animal.contact, animal.country)
         )
         con.commit()
         animal_id = cursor.lastrowid
