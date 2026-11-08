@@ -16,6 +16,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "")
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "")
+WEBAPP_URL = os.getenv("WEBAPP_URL", os.getenv("RENDER_EXTERNAL_URL", "https://kotodom.onrender.com")).rstrip("/")
 
 app = FastAPI(title="КОТОДОМ", description="Адресная помощь животным")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -71,8 +72,11 @@ async def startup():
             async with httpx.AsyncClient(timeout=20) as client:
                 r = await client.post(f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook", json=payload)
                 r.raise_for_status()
+                menu = {"menu_button": {"type": "web_app", "text": "Открыть КОТОДОМ", "web_app": {"url": WEBAPP_URL}}}
+                m = await client.post(f"https://api.telegram.org/bot{BOT_TOKEN}/setChatMenuButton", json=menu)
+                m.raise_for_status()
         except Exception as exc:
-            print(f"Telegram webhook setup failed: {exc}")
+            print(f"Telegram setup failed: {exc}")
 
 
 class CaseCreate(BaseModel):
@@ -193,6 +197,17 @@ async def telegram_send(chat_id: str, message: str):
         )
 
 
+async def telegram_send_with_keyboard(chat_id: str, message: str, keyboard: dict):
+    if not BOT_TOKEN:
+        return
+    async with httpx.AsyncClient(timeout=15) as client:
+        response = await client.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            json={"chat_id": chat_id, "text": message, "reply_markup": keyboard}
+        )
+        response.raise_for_status()
+
+
 async def notify_admin(message: str):
     if ADMIN_CHAT_ID:
         await telegram_send(ADMIN_CHAT_ID, message)
@@ -225,6 +240,13 @@ async def telegram_webhook(request: Request):
         return {"ok": True}
 
     if incoming.startswith("/start") or incoming.startswith("/help"):
+        keyboard = {"inline_keyboard": [[{"text": "🐾 Открыть КОТОДОМ", "web_app": {"url": WEBAPP_URL}}], [{"text": "Подать заявку в чате", "callback_data": "apply_in_chat"}]]}
+        await telegram_send_with_keyboard(str(chat_id),
+            "Здравствуйте! Это КОТОДОМ 🐾\\nОткройте мини-приложение, чтобы посмотреть сборы, пополнить общую копилку или отправить заявку.\\n\\n"
+            "Если удобнее, заявку можно заполнить прямо в чате командой /apply.", keyboard)
+        return {"ok": True}
+
+    if incoming.startswith("/apply"):
         with closing(db()) as con:
             con.execute(
                 "INSERT OR REPLACE INTO bot_drafts(chat_id,step,payload) VALUES(?,0,'{}')",
@@ -232,10 +254,7 @@ async def telegram_webhook(request: Request):
             )
             con.commit()
         await telegram_send(str(chat_id),
-            "Здравствуйте! Это КОТОДОМ 🐾\nМы принимаем заявки на адресную помощь животным.\n\n"
-            "Я задам несколько вопросов. Подготовьте фото, историю, смету/счёт клиники и контакт.\n"
-            "Сбор не публикуется автоматически: сначала проверяем информацию.\n\n"
-            "Как зовут животное? (Для отмены напишите /cancel)")
+            "Давайте оформим заявку на помощь 🐾\\nКак зовут животное? (Для отмены напишите /cancel)")
         return {"ok": True}
 
     with closing(db()) as con:
