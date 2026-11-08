@@ -387,6 +387,27 @@ async def telegram_webhook(request: Request):
     if not incoming:
         return {"ok": True}
 
+    if str(chat_id) == str(ADMIN_CHAT_ID) and incoming.startswith("/manage "):
+        try:
+            case_id = int(incoming.split(maxsplit=1)[1])
+        except (ValueError, IndexError):
+            await telegram_send(str(chat_id), "Формат: /manage 12")
+            return {"ok": True}
+        with closing(db()) as con:
+            row = con.execute("SELECT * FROM cases WHERE id=?", (case_id,)).fetchone()
+        if not row:
+            await telegram_send(str(chat_id), f"Заявка №{case_id} не найдена.")
+            return {"ok": True}
+        await notify_admin(
+            f"Карточка на настройку №{case_id}\\nЖивотное: {row['animal_name']}\\n"
+            f"Нужда: {row['need_type']}\\nГород: {row['city']}, {row['country']}\\n"
+            f"Сумма: {row['target_amount']} {row['currency']}\\nФото: {row['photo_url'] or 'не добавлено'}\\n"
+            f"Оплата: {row['payment_url'] or 'не настроена'}\\nИстория: {row['story'][:700]}",
+            case_id
+        )
+        await telegram_send(str(chat_id), f"Отправил карточку №{case_id} с кнопками настройки.")
+        return {"ok": True}
+
     if incoming in ("/myid", "/id"):
         await telegram_send(str(chat_id), f"Ваш Telegram ID для уведомлений КОТОДОМ: {chat_id}")
         return {"ok": True}
