@@ -1,5 +1,7 @@
 import os
 import sqlite3
+import uuid
+from urllib.parse import urlparse
 from contextlib import closing
 from pathlib import Path
 from typing import Optional
@@ -49,6 +51,17 @@ def init_db():
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        columns = {row["name"] for row in con.execute("PRAGMA table_info(cases)").fetchall()}
+        if "payment_url" not in columns:
+            con.execute("ALTER TABLE cases ADD COLUMN payment_url TEXT DEFAULT ''")
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS admin_actions (
+                chat_id INTEGER PRIMARY KEY,
+                case_id INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         con.execute("""
             CREATE TABLE IF NOT EXISTS bot_drafts (
                 chat_id INTEGER PRIMARY KEY,
@@ -63,6 +76,7 @@ def init_db():
 @app.on_event("startup")
 async def startup():
     init_db()
+    (BASE_DIR / "static" / "uploads").mkdir(parents=True, exist_ok=True)
     public_url = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
     if BOT_TOKEN and public_url:
         payload = {"url": public_url + "/telegram/webhook"}
@@ -96,6 +110,7 @@ class CaseCreate(BaseModel):
 def case_dict(row):
     item = dict(row)
     item["remaining_amount"] = max(0, round(item["target_amount"] - item["raised_amount"], 2))
+    item["payment_url"] = item.get("payment_url") or ""
     return item
 
 
@@ -218,7 +233,10 @@ async def notify_admin(message: str, case_id: int):
         return
     keyboard = {
         "inline_keyboard": [[
-            {"text": "✅ Одобрить и опубликовать", "callback_data": f"case:publish:{case_id}"},
+            {"text": "💳 Настроить оплату", "callback_data": f"case:payment:{case_id}"},
+            {"text": "📷 Добавить фото", "callback_data": f"case:photo:{case_id}"}
+        ], [
+            {"text": "🚀 Опубликовать", "callback_data": f"case:publish:{case_id}"},
             {"text": "❌ Отклонить", "callback_data": f"case:reject:{case_id}"}
         ]]
     }
@@ -267,25 +285,43 @@ async def telegram_webhook(request: Request):
             await telegram_answer_callback(callback_id, "Нет доступа.")
             return {"ok": True}
         parts = callback_data.split(":")
-        if len(parts) == 3 and parts[0] == "case" and parts[1] in ("publish", "reject") and parts[2].isdigit():
-            case_id = int(parts[2])
-            new_status = "published" if parts[1] == "publish" else "rejected"
+        if len(parts) == 3 and parts[0] == "case" and parts[1] in ("payment", "photo", "publish", "reject") and parts[2].isdigit():
+            action, case_id = parts[1], int(parts[2])
             with closing(db()) as con:
-                row = con.execute("SELECT animal_name,status FROM cases WHERE id=?", (case_id,)).fetchone()
+                row = con.execute("SELECT animal_name,status,payment_url,photo_url FROM cases WHERE id=?", (case_id,)).fetchone()
                 if not row:
                     await telegram_answer_callback(callback_id, "Заявка не найдена.")
                     return {"ok": True}
                 if row["status"] != "pending":
                     await telegram_answer_callback(callback_id, "Эта заявка уже обработана.")
                     return {"ok": True}
-                con.execute("UPDATE cases SET status=? WHERE id=?", (new_status, case_id))
-                con.commit()
-            result_text = "опубликована на сайте" if new_status == "published" else "отклонена"
+                if action in ("payment", "photo"):
+                    con.execute("INSERT OR REPLACE INTO admin_actions(chat_id,case_id,action) VALUES(?,?,?)",
+                                (int(callback_chat_id), case_id, action))
+                    con.commit()
+                    prompt = ("Отправьте следующим сообщением HTTPS-ссылку Tribute для этого сбора."
+                              if action == "payment" else
+                              "Отправьте следующим сообщением фотографию кота как фото (не как файл).")
+                    await telegram_answer_callback(callback_id, "Жду данные в следующем сообщении.")
+                    await telegram_send(callback_chat_id, f"Заявка №{case_id} — {row['animal_name']}\\n{prompt}\\nДля отмены напишите /cancel.")
+                    return {"ok": True}
+                if action == "publish":
+                    if not row["payment_url"]:
+                        await telegram_answer_callback(callback_id, "Сначала настройте ссылку оплаты.")
+                        return {"ok": True}
+                    if not row["photo_url"]:
+                        await telegram_answer_callback(callback_id, "Сначала добавьте фотографию.")
+                        return {"ok": True}
+                    con.execute("UPDATE cases SET status='published' WHERE id=?", (case_id,))
+                    con.commit()
+                    result_text = "опубликована на сайте"
+                else:
+                    con.execute("UPDATE cases SET status='rejected' WHERE id=?", (case_id,))
+                    con.commit()
+                    result_text = "отклонена"
             await telegram_answer_callback(callback_id, f"Заявка №{case_id} {result_text}.")
-            await telegram_edit_message(
-                callback_chat_id, message_id,
-                f"Заявка №{case_id} — {row['animal_name']}\\nСтатус: {result_text}."
-            )
+            await telegram_edit_message(callback_chat_id, message_id,
+                f"Заявка №{case_id} — {row['animal_name']}\\nСтатус: {result_text}.")
         else:
             await telegram_answer_callback(callback_id, "Неизвестное действие.")
         return {"ok": True}
@@ -294,7 +330,61 @@ async def telegram_webhook(request: Request):
     chat = message.get("chat", {})
     chat_id = chat.get("id")
     incoming = (message.get("text") or "").strip()
-    if not chat_id or not incoming:
+    if not chat_id:
+        return {"ok": True}
+
+    if str(chat_id) == str(ADMIN_CHAT_ID):
+        with closing(db()) as con:
+            pending_action = con.execute("SELECT case_id,action FROM admin_actions WHERE chat_id=?", (chat_id,)).fetchone()
+        if pending_action and incoming == "/cancel":
+            with closing(db()) as con:
+                con.execute("DELETE FROM admin_actions WHERE chat_id=?", (chat_id,))
+                con.commit()
+            await telegram_send(str(chat_id), "Действие отменено.")
+            return {"ok": True}
+        if pending_action and pending_action["action"] == "payment" and incoming:
+            parsed = urlparse(incoming)
+            if parsed.scheme != "https" or not parsed.netloc:
+                await telegram_send(str(chat_id), "Нужна корректная HTTPS-ссылка Tribute. Попробуйте ещё раз или /cancel.")
+                return {"ok": True}
+            with closing(db()) as con:
+                con.execute("UPDATE cases SET payment_url=? WHERE id=? AND status='pending'", (incoming, pending_action["case_id"]))
+                con.execute("DELETE FROM admin_actions WHERE chat_id=?", (chat_id,))
+                con.commit()
+            await telegram_send(str(chat_id), f"✅ Ссылка оплаты сохранена для заявки №{pending_action['case_id']}.")
+            return {"ok": True}
+        if pending_action and pending_action["action"] == "photo":
+            photo = message.get("photo") or []
+            if photo:
+                file_id = photo[-1]["file_id"]
+                try:
+                    async with httpx.AsyncClient(timeout=25) as client:
+                        info = await client.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getFile", params={"file_id": file_id})
+                        info.raise_for_status()
+                        file_path = info.json()["result"]["file_path"]
+                        download = await client.get(f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}")
+                        download.raise_for_status()
+                    suffix = Path(file_path).suffix.lower()
+                    if suffix not in (".jpg", ".jpeg", ".png", ".webp"):
+                        suffix = ".jpg"
+                    filename = f"case-{pending_action['case_id']}-{uuid.uuid4().hex}{suffix}"
+                    target = BASE_DIR / "static" / "uploads" / filename
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(download.content)
+                    image_url = f"/static/uploads/{filename}"
+                    with closing(db()) as con:
+                        con.execute("UPDATE cases SET photo_url=? WHERE id=? AND status='pending'", (image_url, pending_action["case_id"]))
+                        con.execute("DELETE FROM admin_actions WHERE chat_id=?", (chat_id,))
+                        con.commit()
+                    await telegram_send(str(chat_id), f"✅ Фото сохранено для заявки №{pending_action['case_id']}.")
+                except Exception as exc:
+                    print(f"Admin photo upload failed: {exc}")
+                    await telegram_send(str(chat_id), "Не удалось сохранить фото. Попробуйте отправить его ещё раз.")
+                return {"ok": True}
+            await telegram_send(str(chat_id), "Пришлите фотографию именно как фото. Для отмены /cancel.")
+            return {"ok": True}
+
+    if not incoming:
         return {"ok": True}
 
     if incoming in ("/myid", "/id"):
