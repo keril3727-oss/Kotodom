@@ -240,7 +240,7 @@ async def telegram_webhook(request: Request):
         return {"ok": True}
 
     if incoming.startswith("/start") or incoming.startswith("/help"):
-        keyboard = {"inline_keyboard": [[{"text": "🐾 Открыть КОТОДОМ", "web_app": {"url": WEBAPP_URL}}], [{"text": "Подать заявку в чате", "callback_data": "apply_in_chat"}]]}
+        keyboard = {"inline_keyboard": [[{"text": "🐾 Открыть КОТОДОМ", "web_app": {"url": WEBAPP_URL}}]]}
         await telegram_send_with_keyboard(str(chat_id),
             "Здравствуйте! Это КОТОДОМ 🐾\\nОткройте мини-приложение, чтобы посмотреть сборы, пополнить общую копилку или отправить заявку.\\n\\n"
             "Если удобнее, заявку можно заполнить прямо в чате командой /apply.", keyboard)
