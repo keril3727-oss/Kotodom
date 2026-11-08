@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Header
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -14,43 +14,46 @@ BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = Path(os.getenv("DATABASE_PATH", str(BASE_DIR / "kotodom.db")))
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
+ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "")
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "")
 
-app = FastAPI(title="Kotodom", description="Помощь бездомным котятам и животным")
+app = FastAPI(title="КОТОДОМ", description="Адресная помощь животным")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
 
 def db():
-    connection = sqlite3.connect(DB_PATH)
-    connection.row_factory = sqlite3.Row
-    return connection
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    return con
 
 
 def init_db():
     with closing(db()) as con:
         con.execute("""
-            CREATE TABLE IF NOT EXISTS animals (
+            CREATE TABLE IF NOT EXISTS cases (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
+                animal_name TEXT NOT NULL,
                 city TEXT NOT NULL,
-                description TEXT NOT NULL,
+                country TEXT NOT NULL,
+                story TEXT NOT NULL,
+                need_type TEXT NOT NULL,
+                clinic TEXT DEFAULT '',
+                target_amount REAL NOT NULL,
+                currency TEXT NOT NULL,
+                evidence TEXT DEFAULT '',
                 photo_url TEXT DEFAULT '',
                 contact TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'Ищет дом',
+                status TEXT NOT NULL DEFAULT 'pending',
+                raised_amount REAL NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        columns = {row["name"] for row in con.execute("PRAGMA table_info(animals)").fetchall()}
-        if "country" not in columns:
-            con.execute("ALTER TABLE animals ADD COLUMN country TEXT NOT NULL DEFAULT 'Россия'")
         con.execute("""
-            CREATE TABLE IF NOT EXISTS applications (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                animal_id INTEGER NOT NULL,
-                applicant_name TEXT NOT NULL,
-                contact TEXT NOT NULL,
-                message TEXT DEFAULT '',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(animal_id) REFERENCES animals(id)
+            CREATE TABLE IF NOT EXISTS bot_drafts (
+                chat_id INTEGER PRIMARY KEY,
+                step INTEGER NOT NULL DEFAULT 0,
+                payload TEXT NOT NULL DEFAULT '{}',
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
         con.commit()
@@ -61,35 +64,35 @@ async def startup():
     init_db()
     public_url = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
     if BOT_TOKEN and public_url:
-        webhook_url = public_url + "/telegram/webhook"
-        payload = {"url": webhook_url}
+        payload = {"url": public_url + "/telegram/webhook"}
         if WEBHOOK_SECRET:
             payload["secret_token"] = WEBHOOK_SECRET
         try:
             async with httpx.AsyncClient(timeout=20) as client:
-                response = await client.post(
-                    f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook",
-                    json=payload
-                )
-                response.raise_for_status()
+                r = await client.post(f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook", json=payload)
+                r.raise_for_status()
         except Exception as exc:
             print(f"Telegram webhook setup failed: {exc}")
 
 
-class AnimalCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=60)
+class CaseCreate(BaseModel):
+    animal_name: str = Field(min_length=1, max_length=80)
     city: str = Field(min_length=1, max_length=100)
-    description: str = Field(min_length=5, max_length=1500)
+    country: str = Field(pattern="^(Россия|Беларусь)$")
+    story: str = Field(min_length=20, max_length=3000)
+    need_type: str = Field(pattern="^(Лечение|Корм|Лечение и корм|Другое)$")
+    clinic: str = Field(default="", max_length=180)
+    target_amount: float = Field(gt=0, le=10000000)
+    currency: str = Field(pattern="^(RUB|BYN)$")
+    evidence: str = Field(default="", max_length=500)
     photo_url: str = Field(default="", max_length=500)
     contact: str = Field(min_length=3, max_length=150)
-    country: str = Field(default="Россия", pattern="^(Россия|Беларусь)$")
 
 
-class ApplicationCreate(BaseModel):
-    animal_id: int
-    applicant_name: str = Field(min_length=1, max_length=100)
-    contact: str = Field(min_length=3, max_length=150)
-    message: str = Field(default="", max_length=1000)
+def case_dict(row):
+    item = dict(row)
+    item["remaining_amount"] = max(0, round(item["target_amount"] - item["raised_amount"], 2))
+    return item
 
 
 @app.get("/")
@@ -102,59 +105,97 @@ def health():
     return {"status": "ok", "project": "kotodom"}
 
 
-@app.get("/api/animals")
-def list_animals(city: Optional[str] = None, country: Optional[str] = None):
+@app.get("/api/cases")
+def list_cases():
     with closing(db()) as con:
-        query = "SELECT * FROM animals WHERE 1=1"
-        params = []
-        if city:
-            query += " AND city LIKE ?"
-            params.append(f"%{city}%")
-        if country in ("Россия", "Беларусь"):
-            query += " AND country = ?"
-            params.append(country)
-        rows = con.execute(query + " ORDER BY id DESC", params).fetchall()
-    return [dict(row) for row in rows]
+        rows = con.execute(
+            "SELECT * FROM cases WHERE status='published' ORDER BY id DESC"
+        ).fetchall()
+    return [case_dict(row) for row in rows]
 
 
-@app.post("/api/animals")
-def create_animal(animal: AnimalCreate):
+@app.get("/api/cases/{case_id}")
+def get_case(case_id: int):
     with closing(db()) as con:
-        cursor = con.execute(
-            """INSERT INTO animals (name, city, description, photo_url, contact, country)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (animal.name, animal.city, animal.description, animal.photo_url, animal.contact, animal.country)
-        )
-        con.commit()
-        animal_id = cursor.lastrowid
-    return {"ok": True, "id": animal_id, "message": "Объявление отправлено"}
-
-
-@app.post("/api/applications")
-def create_application(application: ApplicationCreate):
-    with closing(db()) as con:
-        exists = con.execute(
-            "SELECT id FROM animals WHERE id = ? AND status = 'Ищет дом'",
-            (application.animal_id,)
+        row = con.execute(
+            "SELECT * FROM cases WHERE id=? AND status='published'", (case_id,)
         ).fetchone()
-        if not exists:
-            raise HTTPException(status_code=404, detail="Объявление не найдено")
-        con.execute(
-            """INSERT INTO applications (animal_id, applicant_name, contact, message)
-               VALUES (?, ?, ?, ?)""",
-            (application.animal_id, application.applicant_name,
-             application.contact, application.message)
-        )
+    if not row:
+        raise HTTPException(status_code=404, detail="Сбор не найден")
+    return case_dict(row)
+
+
+@app.post("/api/cases")
+async def create_case(case: CaseCreate):
+    with closing(db()) as con:
+        cur = con.execute("""
+            INSERT INTO cases
+            (animal_name, city, country, story, need_type, clinic, target_amount,
+             currency, evidence, photo_url, contact)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (case.animal_name, case.city, case.country, case.story, case.need_type,
+              case.clinic, case.target_amount, case.currency, case.evidence,
+              case.photo_url, case.contact))
         con.commit()
-    return {"ok": True, "message": "Заявка отправлена. Спасибо за желание помочь!"}
+        case_id = cur.lastrowid
+    await notify_admin(
+        "Новая заявка КОТОДОМ №{}\nЖивотное: {}\nНужда: {}\nГород: {}, {}\nСумма: {} {}\nКонтакт: {}\nИстория: {}".format(
+            case_id, case.animal_name, case.need_type, case.city, case.country,
+            case.target_amount, case.currency, case.contact, case.story[:700]
+        )
+    )
+    return {"ok": True, "id": case_id, "status": "pending",
+            "message": "Заявка принята на проверку. Сбор появится после подтверждения документов."}
 
 
-async def send_telegram_message(chat_id: int, text: str):
+def require_admin(key: Optional[str]):
+    if not ADMIN_API_KEY or key != ADMIN_API_KEY:
+        raise HTTPException(status_code=403, detail="Нет доступа администратора")
+
+
+@app.get("/api/admin/cases")
+def admin_cases(x_admin_key: Optional[str] = Header(default=None)):
+    require_admin(x_admin_key)
+    with closing(db()) as con:
+        rows = con.execute("SELECT * FROM cases ORDER BY id DESC").fetchall()
+    return [case_dict(row) for row in rows]
+
+
+@app.post("/api/admin/cases/{case_id}/publish")
+def publish_case(case_id: int, x_admin_key: Optional[str] = Header(default=None)):
+    require_admin(x_admin_key)
+    with closing(db()) as con:
+        cur = con.execute("UPDATE cases SET status='published' WHERE id=?", (case_id,))
+        con.commit()
+        if not cur.rowcount:
+            raise HTTPException(status_code=404, detail="Заявка не найдена")
+    return {"ok": True, "status": "published"}
+
+
+@app.post("/api/admin/cases/{case_id}/reject")
+def reject_case(case_id: int, x_admin_key: Optional[str] = Header(default=None)):
+    require_admin(x_admin_key)
+    with closing(db()) as con:
+        cur = con.execute("UPDATE cases SET status='rejected' WHERE id=?", (case_id,))
+        con.commit()
+        if not cur.rowcount:
+            raise HTTPException(status_code=404, detail="Заявка не найдена")
+    return {"ok": True, "status": "rejected"}
+
+
+async def telegram_send(chat_id: str, message: str):
     if not BOT_TOKEN:
         return
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     async with httpx.AsyncClient(timeout=15) as client:
-        await client.post(url, json={"chat_id": chat_id, "text": text})
+        await client.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            json={"chat_id": chat_id, "text": message}
+        )
+
+
+async def notify_admin(message: str):
+    if ADMIN_CHAT_ID:
+        await telegram_send(ADMIN_CHAT_ID, message)
 
 
 @app.post("/telegram/webhook")
@@ -168,21 +209,107 @@ async def telegram_webhook(request: Request):
     message = update.get("message", {})
     chat = message.get("chat", {})
     chat_id = chat.get("id")
-    text = (message.get("text") or "").strip()
+    incoming = (message.get("text") or "").strip()
+    if not chat_id or not incoming:
+        return {"ok": True}
 
-    if chat_id and text:
-        if text.startswith("/start"):
-            reply = (
-                "Привет! Это КОТОДОМ 🐾\n\n"
-                "Здесь мы помогаем котятам и другим животным найти дом.\n"
-                "Сайт с объявлениями скоро откроется.\n\n"
-                "Команды:\n"
-                "/help — помощь"
+    if incoming in ("/cancel", "Отмена"):
+        with closing(db()) as con:
+            con.execute("DELETE FROM bot_drafts WHERE chat_id=?", (chat_id,))
+            con.commit()
+        await telegram_send(str(chat_id), "Заявка отменена. Если понадобится помощь, напишите /start.")
+        return {"ok": True}
+
+    if incoming.startswith("/start") or incoming.startswith("/help"):
+        with closing(db()) as con:
+            con.execute(
+                "INSERT OR REPLACE INTO bot_drafts(chat_id,step,payload) VALUES(?,0,'{}')",
+                (chat_id,)
             )
-        elif text.startswith("/help"):
-            reply = "КОТОДОМ помогает искать дом животным и находить волонтёров. Скоро здесь появятся новые функции."
-        else:
-            reply = "Спасибо, что хотите помочь! Напишите /help, чтобы узнать о проекте."
-        await send_telegram_message(chat_id, reply)
+            con.commit()
+        await telegram_send(str(chat_id),
+            "Здравствуйте! Это КОТОДОМ 🐾\nМы принимаем заявки на адресную помощь животным.\n\n"
+            "Я задам несколько вопросов. Подготовьте фото, историю, смету/счёт клиники и контакт.\n"
+            "Сбор не публикуется автоматически: сначала проверяем информацию.\n\n"
+            "Как зовут животное? (Для отмены напишите /cancel)")
+        return {"ok": True}
 
+    with closing(db()) as con:
+        draft = con.execute("SELECT step,payload FROM bot_drafts WHERE chat_id=?", (chat_id,)).fetchone()
+        if not draft:
+            await telegram_send(str(chat_id), "Чтобы подать заявку, напишите /start.")
+            return {"ok": True}
+        import json
+        payload = json.loads(draft["payload"] or "{}")
+        step = draft["step"]
+        fields = [
+            ("animal_name", "В каком городе находится животное?"),
+            ("city", "Выберите страну: Россия или Беларусь."),
+            ("country", "Опишите историю и проблему животного (не менее пары предложений)."),
+            ("story", "Какая помощь нужна? Напишите: Лечение, Корм, Лечение и корм или Другое."),
+            ("need_type", "Название клиники или поставщика корма (если известно). Если пока неизвестно, напишите «Не знаю»."),
+            ("clinic", "Сколько нужно собрать? Укажите сумму числом, например 15000."),
+            ("target_amount", "В какой валюте сбор: RUB или BYN?"),
+            ("currency", "Ссылка на документы/смету/счёт (если есть). Если нет, напишите «Нет»."),
+            ("evidence", "Ссылка на фото животного (если есть). Если нет, напишите «Нет»."),
+            ("photo_url", "Контакт ответственного человека (Telegram или телефон)."),
+            ("contact", None)
+        ]
+        key, next_prompt = fields[step]
+        if key == "country" and incoming not in ("Россия", "Беларусь"):
+            await telegram_send(str(chat_id), "Пожалуйста, ответьте точно: Россия или Беларусь.")
+            return {"ok": True}
+        if key == "need_type" and incoming not in ("Лечение", "Корм", "Лечение и корм", "Другое"):
+            await telegram_send(str(chat_id), "Выберите один вариант: Лечение, Корм, Лечение и корм или Другое.")
+            return {"ok": True}
+        if key == "target_amount":
+            try:
+                amount = float(incoming.replace(",", ".").replace(" ", ""))
+                if amount <= 0:
+                    raise ValueError()
+                payload[key] = amount
+            except ValueError:
+                await telegram_send(str(chat_id), "Введите положительную сумму числом, например 15000.")
+                return {"ok": True}
+        elif key == "currency" and incoming not in ("RUB", "BYN"):
+            await telegram_send(str(chat_id), "Ответьте RUB или BYN.")
+            return {"ok": True}
+        else:
+            payload[key] = "" if incoming.lower() in ("нет", "не знаю") else incoming
+        next_step = step + 1
+        if next_step >= len(fields):
+            required = ["animal_name","city","country","story","need_type","target_amount","currency","contact"]
+            if any(not str(payload.get(k, "")).strip() for k in required):
+                await telegram_send(str(chat_id), "Не хватает обязательных данных. Начните заново командой /start.")
+                con.execute("DELETE FROM bot_drafts WHERE chat_id=?", (chat_id,))
+                con.commit()
+                return {"ok": True}
+            cur = con.execute("""
+                INSERT INTO cases
+                (animal_name,city,country,story,need_type,clinic,target_amount,currency,evidence,photo_url,contact)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?)
+            """, tuple(payload.get(k, "") for k in [
+                "animal_name","city","country","story","need_type","clinic","target_amount",
+                "currency","evidence","photo_url","contact"
+            ]))
+            con.execute("DELETE FROM bot_drafts WHERE chat_id=?", (chat_id,))
+            con.commit()
+            case_id = cur.lastrowid
+            await notify_admin(
+                f"Новая заявка из Telegram №{case_id}\nЖивотное: {payload['animal_name']}\n"
+                f"Нужда: {payload['need_type']}\nГород: {payload['city']}, {payload['country']}\n"
+                f"Сумма: {payload['target_amount']} {payload['currency']}\n"
+                f"Клиника: {payload.get('clinic','')}\nДокументы: {payload.get('evidence','')}\n"
+                f"Фото: {payload.get('photo_url','')}\nКонтакт: {payload['contact']}\n"
+                f"История: {payload['story'][:700]}"
+            )
+            await telegram_send(str(chat_id),
+                f"Спасибо! Заявка №{case_id} принята на проверку. 🐾\n"
+                "Сбор появится на сайте только после проверки истории и подтверждения стоимости. "
+                "Пока не отправляйте деньги по непроверенным реквизитам.")
+            return {"ok": True}
+        con.execute("UPDATE bot_drafts SET step=?,payload=?,updated_at=CURRENT_TIMESTAMP WHERE chat_id=?",
+                    (next_step, json.dumps(payload, ensure_ascii=False), chat_id))
+        con.commit()
+    await telegram_send(str(chat_id), next_prompt or "Спасибо! Заявка получена.")
     return {"ok": True}
