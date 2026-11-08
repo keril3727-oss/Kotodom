@@ -357,8 +357,8 @@ async def telegram_webhook(request: Request):
                     await telegram_answer_callback(callback_id, "Эта заявка уже обработана.")
                     return {"ok": True}
                 if action in ("payment", "photo"):
-                    con.execute("INSERT INTO kotodom_admin_actions(chat_id,case_id,action) VALUES(?,?,?)
-                                ON CONFLICT(chat_id) DO UPDATE SET case_id=excluded.case_id, action=excluded.action, updated_at=CURRENT_TIMESTAMP",
+                    con.execute("""INSERT INTO kotodom_admin_actions(chat_id,case_id,action) VALUES(?,?,?)
+                                ON CONFLICT(chat_id) DO UPDATE SET case_id=excluded.case_id, action=excluded.action, updated_at=CURRENT_TIMESTAMP""",
                                 (int(callback_chat_id), case_id, action))
                     con.commit()
                     prompt = ("Отправьте следующим сообщением HTTPS-ссылку Tribute для этого сбора."
@@ -491,8 +491,8 @@ async def telegram_webhook(request: Request):
     if incoming.startswith("/apply"):
         with closing(db()) as con:
             con.execute(
-                "INSERT INTO kotodom_bot_drafts(chat_id,step,payload) VALUES(?,0,'{}')
-                ON CONFLICT(chat_id) DO UPDATE SET step=0, payload='{}', updated_at=CURRENT_TIMESTAMP",
+                """INSERT INTO kotodom_bot_drafts(chat_id,step,payload) VALUES(?,0,'{}')
+                ON CONFLICT(chat_id) DO UPDATE SET step=0, payload='{}', updated_at=CURRENT_TIMESTAMP""",
                 (chat_id,)
             )
             con.commit()
