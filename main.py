@@ -1,6 +1,8 @@
 import os
 import sqlite3
 import uuid
+import psycopg
+from psycopg.rows import dict_row
 from urllib.parse import urlparse
 from contextlib import closing
 from pathlib import Path
@@ -14,6 +16,7 @@ from pydantic import BaseModel, Field
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = Path(os.getenv("DATABASE_PATH", str(BASE_DIR / "kotodom.db")))
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "")
@@ -24,54 +27,112 @@ app = FastAPI(title="КОТОДОМ", description="Адресная помощь
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
 
+class DatabaseConnection:
+    def __init__(self):
+        self.is_postgres = bool(DATABASE_URL)
+        if self.is_postgres:
+            self.connection = psycopg.connect(DATABASE_URL, row_factory=dict_row)
+        else:
+            self.connection = sqlite3.connect(DB_PATH)
+            self.connection.row_factory = sqlite3.Row
+
+    def execute(self, query, params=()):
+        if self.is_postgres:
+            query = query.replace("?", "%s")
+        return self.connection.execute(query, params)
+
+    def commit(self):
+        self.connection.commit()
+
+    def close(self):
+        self.connection.close()
+
+
 def db():
-    con = sqlite3.connect(DB_PATH)
-    con.row_factory = sqlite3.Row
-    return con
+    return DatabaseConnection()
 
 
 def init_db():
     with closing(db()) as con:
-        con.execute("""
-            CREATE TABLE IF NOT EXISTS cases (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                animal_name TEXT NOT NULL,
-                city TEXT NOT NULL,
-                country TEXT NOT NULL,
-                story TEXT NOT NULL,
-                need_type TEXT NOT NULL,
-                clinic TEXT DEFAULT '',
-                target_amount REAL NOT NULL,
-                currency TEXT NOT NULL,
-                evidence TEXT DEFAULT '',
-                photo_url TEXT DEFAULT '',
-                contact TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending',
-                raised_amount REAL NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        columns = {row["name"] for row in con.execute("PRAGMA table_info(cases)").fetchall()}
-        if "payment_url" not in columns:
-            con.execute("ALTER TABLE cases ADD COLUMN payment_url TEXT DEFAULT ''")
-        con.execute("""
-            CREATE TABLE IF NOT EXISTS admin_actions (
-                chat_id INTEGER PRIMARY KEY,
-                case_id INTEGER NOT NULL,
-                action TEXT NOT NULL,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        con.execute("""
-            CREATE TABLE IF NOT EXISTS bot_drafts (
-                chat_id INTEGER PRIMARY KEY,
-                step INTEGER NOT NULL DEFAULT 0,
-                payload TEXT NOT NULL DEFAULT '{}',
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+        if DATABASE_URL:
+            con.execute("""
+                CREATE TABLE IF NOT EXISTS kotodom_cases (
+                    id BIGSERIAL PRIMARY KEY,
+                    animal_name TEXT NOT NULL,
+                    city TEXT NOT NULL,
+                    country TEXT NOT NULL,
+                    story TEXT NOT NULL,
+                    need_type TEXT NOT NULL,
+                    clinic TEXT DEFAULT '',
+                    target_amount DOUBLE PRECISION NOT NULL,
+                    currency TEXT NOT NULL,
+                    evidence TEXT DEFAULT '',
+                    photo_url TEXT DEFAULT '',
+                    contact TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    raised_amount DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    payment_url TEXT DEFAULT ''
+                )
+            """)
+            con.execute("""
+                CREATE TABLE IF NOT EXISTS kotodom_admin_actions (
+                    chat_id BIGINT PRIMARY KEY,
+                    case_id BIGINT NOT NULL,
+                    action TEXT NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            con.execute("""
+                CREATE TABLE IF NOT EXISTS kotodom_bot_drafts (
+                    chat_id BIGINT PRIMARY KEY,
+                    step INTEGER NOT NULL DEFAULT 0,
+                    payload TEXT NOT NULL DEFAULT '{}',
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+        else:
+            con.execute("""
+                CREATE TABLE IF NOT EXISTS kotodom_cases (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    animal_name TEXT NOT NULL,
+                    city TEXT NOT NULL,
+                    country TEXT NOT NULL,
+                    story TEXT NOT NULL,
+                    need_type TEXT NOT NULL,
+                    clinic TEXT DEFAULT '',
+                    target_amount REAL NOT NULL,
+                    currency TEXT NOT NULL,
+                    evidence TEXT DEFAULT '',
+                    photo_url TEXT DEFAULT '',
+                    contact TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    raised_amount REAL NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    payment_url TEXT DEFAULT ''
+                )
+            """)
+            con.execute("""
+                CREATE TABLE IF NOT EXISTS kotodom_admin_actions (
+                    chat_id INTEGER PRIMARY KEY,
+                    case_id INTEGER NOT NULL,
+                    action TEXT NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            con.execute("""
+                CREATE TABLE IF NOT EXISTS kotodom_bot_drafts (
+                    chat_id INTEGER PRIMARY KEY,
+                    step INTEGER NOT NULL DEFAULT 0,
+                    payload TEXT NOT NULL DEFAULT '{}',
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+        if not DATABASE_URL:
+            columns = {row["name"] for row in con.execute("PRAGMA table_info(kotodom_cases)").fetchall()}
+            if "payment_url" not in columns:
+                con.execute("ALTER TABLE kotodom_cases ADD COLUMN payment_url TEXT DEFAULT ''")
         con.commit()
-
 
 @app.on_event("startup")
 async def startup():
@@ -128,7 +189,7 @@ def health():
 def list_cases():
     with closing(db()) as con:
         rows = con.execute(
-            "SELECT * FROM cases WHERE status='published' ORDER BY id DESC"
+            "SELECT * FROM kotodom_cases WHERE status='published' ORDER BY id DESC"
         ).fetchall()
     return [case_dict(row) for row in rows]
 
@@ -137,7 +198,7 @@ def list_cases():
 def get_case(case_id: int):
     with closing(db()) as con:
         row = con.execute(
-            "SELECT * FROM cases WHERE id=? AND status='published'", (case_id,)
+            "SELECT * FROM kotodom_cases WHERE id=? AND status='published'", (case_id,)
         ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Сбор не найден")
@@ -148,15 +209,15 @@ def get_case(case_id: int):
 async def create_case(case: CaseCreate):
     with closing(db()) as con:
         cur = con.execute("""
-            INSERT INTO cases
+            INSERT INTO kotodom_cases
             (animal_name, city, country, story, need_type, clinic, target_amount,
              currency, evidence, photo_url, contact)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id
         """, (case.animal_name, case.city, case.country, case.story, case.need_type,
               case.clinic, case.target_amount, case.currency, case.evidence,
               case.photo_url, case.contact))
         con.commit()
-        case_id = cur.lastrowid
+        case_id = cur.fetchone()["id"]
     try:
         await notify_admin(
             "Новая заявка КОТОДОМ №{}\nЖивотное: {}\nНужда: {}\nГород: {}, {}\nСумма: {} {}\nКонтакт: {}\nИстория: {}".format(
@@ -177,30 +238,30 @@ def require_admin(key: Optional[str]):
         raise HTTPException(status_code=403, detail="Нет доступа администратора")
 
 
-@app.get("/api/admin/cases")
+@app.get("/api/admin/kotodom_cases")
 def admin_cases(x_admin_key: Optional[str] = Header(default=None)):
     require_admin(x_admin_key)
     with closing(db()) as con:
-        rows = con.execute("SELECT * FROM cases ORDER BY id DESC").fetchall()
+        rows = con.execute("SELECT * FROM kotodom_cases ORDER BY id DESC").fetchall()
     return [case_dict(row) for row in rows]
 
 
-@app.post("/api/admin/cases/{case_id}/publish")
+@app.post("/api/admin/kotodom_cases/{case_id}/publish")
 def publish_case(case_id: int, x_admin_key: Optional[str] = Header(default=None)):
     require_admin(x_admin_key)
     with closing(db()) as con:
-        cur = con.execute("UPDATE cases SET status='published' WHERE id=?", (case_id,))
+        cur = con.execute("UPDATE kotodom_cases SET status='published' WHERE id=?", (case_id,))
         con.commit()
         if not cur.rowcount:
             raise HTTPException(status_code=404, detail="Заявка не найдена")
     return {"ok": True, "status": "published"}
 
 
-@app.post("/api/admin/cases/{case_id}/reject")
+@app.post("/api/admin/kotodom_cases/{case_id}/reject")
 def reject_case(case_id: int, x_admin_key: Optional[str] = Header(default=None)):
     require_admin(x_admin_key)
     with closing(db()) as con:
-        cur = con.execute("UPDATE cases SET status='rejected' WHERE id=?", (case_id,))
+        cur = con.execute("UPDATE kotodom_cases SET status='rejected' WHERE id=?", (case_id,))
         con.commit()
         if not cur.rowcount:
             raise HTTPException(status_code=404, detail="Заявка не найдена")
@@ -288,7 +349,7 @@ async def telegram_webhook(request: Request):
         if len(parts) == 3 and parts[0] == "case" and parts[1] in ("payment", "photo", "publish", "reject") and parts[2].isdigit():
             action, case_id = parts[1], int(parts[2])
             with closing(db()) as con:
-                row = con.execute("SELECT animal_name,status,payment_url,photo_url FROM cases WHERE id=?", (case_id,)).fetchone()
+                row = con.execute("SELECT animal_name,status,payment_url,photo_url FROM kotodom_cases WHERE id=?", (case_id,)).fetchone()
                 if not row:
                     await telegram_answer_callback(callback_id, "Заявка не найдена.")
                     return {"ok": True}
@@ -296,7 +357,8 @@ async def telegram_webhook(request: Request):
                     await telegram_answer_callback(callback_id, "Эта заявка уже обработана.")
                     return {"ok": True}
                 if action in ("payment", "photo"):
-                    con.execute("INSERT OR REPLACE INTO admin_actions(chat_id,case_id,action) VALUES(?,?,?)",
+                    con.execute("INSERT INTO kotodom_admin_actions(chat_id,case_id,action) VALUES(?,?,?)
+                                ON CONFLICT(chat_id) DO UPDATE SET case_id=excluded.case_id, action=excluded.action, updated_at=CURRENT_TIMESTAMP",
                                 (int(callback_chat_id), case_id, action))
                     con.commit()
                     prompt = ("Отправьте следующим сообщением HTTPS-ссылку Tribute для этого сбора."
@@ -312,11 +374,11 @@ async def telegram_webhook(request: Request):
                     if not row["photo_url"]:
                         await telegram_answer_callback(callback_id, "Сначала добавьте фотографию.")
                         return {"ok": True}
-                    con.execute("UPDATE cases SET status='published' WHERE id=?", (case_id,))
+                    con.execute("UPDATE kotodom_cases SET status='published' WHERE id=?", (case_id,))
                     con.commit()
                     result_text = "опубликована на сайте"
                 else:
-                    con.execute("UPDATE cases SET status='rejected' WHERE id=?", (case_id,))
+                    con.execute("UPDATE kotodom_cases SET status='rejected' WHERE id=?", (case_id,))
                     con.commit()
                     result_text = "отклонена"
             await telegram_answer_callback(callback_id, f"Заявка №{case_id} {result_text}.")
@@ -335,10 +397,10 @@ async def telegram_webhook(request: Request):
 
     if str(chat_id) == str(ADMIN_CHAT_ID):
         with closing(db()) as con:
-            pending_action = con.execute("SELECT case_id,action FROM admin_actions WHERE chat_id=?", (chat_id,)).fetchone()
+            pending_action = con.execute("SELECT case_id,action FROM kotodom_admin_actions WHERE chat_id=?", (chat_id,)).fetchone()
         if pending_action and incoming == "/cancel":
             with closing(db()) as con:
-                con.execute("DELETE FROM admin_actions WHERE chat_id=?", (chat_id,))
+                con.execute("DELETE FROM kotodom_admin_actions WHERE chat_id=?", (chat_id,))
                 con.commit()
             await telegram_send(str(chat_id), "Действие отменено.")
             return {"ok": True}
@@ -348,8 +410,8 @@ async def telegram_webhook(request: Request):
                 await telegram_send(str(chat_id), "Нужна корректная HTTPS-ссылка Tribute. Попробуйте ещё раз или /cancel.")
                 return {"ok": True}
             with closing(db()) as con:
-                con.execute("UPDATE cases SET payment_url=? WHERE id=? AND status='pending'", (incoming, pending_action["case_id"]))
-                con.execute("DELETE FROM admin_actions WHERE chat_id=?", (chat_id,))
+                con.execute("UPDATE kotodom_cases SET payment_url=? WHERE id=? AND status='pending'", (incoming, pending_action["case_id"]))
+                con.execute("DELETE FROM kotodom_admin_actions WHERE chat_id=?", (chat_id,))
                 con.commit()
             await telegram_send(str(chat_id), f"✅ Ссылка оплаты сохранена для заявки №{pending_action['case_id']}.")
             return {"ok": True}
@@ -373,8 +435,8 @@ async def telegram_webhook(request: Request):
                     target.write_bytes(download.content)
                     image_url = f"/static/uploads/{filename}"
                     with closing(db()) as con:
-                        con.execute("UPDATE cases SET photo_url=? WHERE id=? AND status='pending'", (image_url, pending_action["case_id"]))
-                        con.execute("DELETE FROM admin_actions WHERE chat_id=?", (chat_id,))
+                        con.execute("UPDATE kotodom_cases SET photo_url=? WHERE id=? AND status='pending'", (image_url, pending_action["case_id"]))
+                        con.execute("DELETE FROM kotodom_admin_actions WHERE chat_id=?", (chat_id,))
                         con.commit()
                     await telegram_send(str(chat_id), f"✅ Фото сохранено для заявки №{pending_action['case_id']}.")
                 except Exception as exc:
@@ -394,7 +456,7 @@ async def telegram_webhook(request: Request):
             await telegram_send(str(chat_id), "Формат: /manage 12")
             return {"ok": True}
         with closing(db()) as con:
-            row = con.execute("SELECT * FROM cases WHERE id=?", (case_id,)).fetchone()
+            row = con.execute("SELECT * FROM kotodom_cases WHERE id=?", (case_id,)).fetchone()
         if not row:
             await telegram_send(str(chat_id), f"Заявка №{case_id} не найдена.")
             return {"ok": True}
@@ -414,7 +476,7 @@ async def telegram_webhook(request: Request):
 
     if incoming in ("/cancel", "Отмена"):
         with closing(db()) as con:
-            con.execute("DELETE FROM bot_drafts WHERE chat_id=?", (chat_id,))
+            con.execute("DELETE FROM kotodom_bot_drafts WHERE chat_id=?", (chat_id,))
             con.commit()
         await telegram_send(str(chat_id), "Заявка отменена. Если понадобится помощь, напишите /start.")
         return {"ok": True}
@@ -429,7 +491,8 @@ async def telegram_webhook(request: Request):
     if incoming.startswith("/apply"):
         with closing(db()) as con:
             con.execute(
-                "INSERT OR REPLACE INTO bot_drafts(chat_id,step,payload) VALUES(?,0,'{}')",
+                "INSERT INTO kotodom_bot_drafts(chat_id,step,payload) VALUES(?,0,'{}')
+                ON CONFLICT(chat_id) DO UPDATE SET step=0, payload='{}', updated_at=CURRENT_TIMESTAMP",
                 (chat_id,)
             )
             con.commit()
@@ -438,7 +501,7 @@ async def telegram_webhook(request: Request):
         return {"ok": True}
 
     with closing(db()) as con:
-        draft = con.execute("SELECT step,payload FROM bot_drafts WHERE chat_id=?", (chat_id,)).fetchone()
+        draft = con.execute("SELECT step,payload FROM kotodom_bot_drafts WHERE chat_id=?", (chat_id,)).fetchone()
         if not draft:
             await telegram_send(str(chat_id), "Чтобы подать заявку, напишите /start.")
             return {"ok": True}
@@ -484,20 +547,20 @@ async def telegram_webhook(request: Request):
             required = ["animal_name","city","country","story","need_type","target_amount","currency","contact"]
             if any(not str(payload.get(k, "")).strip() for k in required):
                 await telegram_send(str(chat_id), "Не хватает обязательных данных. Начните заново командой /start.")
-                con.execute("DELETE FROM bot_drafts WHERE chat_id=?", (chat_id,))
+                con.execute("DELETE FROM kotodom_bot_drafts WHERE chat_id=?", (chat_id,))
                 con.commit()
                 return {"ok": True}
             cur = con.execute("""
-                INSERT INTO cases
+                INSERT INTO kotodom_cases
                 (animal_name,city,country,story,need_type,clinic,target_amount,currency,evidence,photo_url,contact)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?) RETURNING id
             """, tuple(payload.get(k, "") for k in [
                 "animal_name","city","country","story","need_type","clinic","target_amount",
                 "currency","evidence","photo_url","contact"
             ]))
-            con.execute("DELETE FROM bot_drafts WHERE chat_id=?", (chat_id,))
+            con.execute("DELETE FROM kotodom_bot_drafts WHERE chat_id=?", (chat_id,))
             con.commit()
-            case_id = cur.lastrowid
+            case_id = cur.fetchone()["id"]
             await notify_admin(
                 f"Новая заявка из Telegram №{case_id}\nЖивотное: {payload['animal_name']}\n"
                 f"Нужда: {payload['need_type']}\nГород: {payload['city']}, {payload['country']}\n"
@@ -511,7 +574,7 @@ async def telegram_webhook(request: Request):
                 "Сбор появится на сайте только после проверки истории и подтверждения стоимости. "
                 "Пока не отправляйте деньги по непроверенным реквизитам.")
             return {"ok": True}
-        con.execute("UPDATE bot_drafts SET step=?,payload=?,updated_at=CURRENT_TIMESTAMP WHERE chat_id=?",
+        con.execute("UPDATE kotodom_bot_drafts SET step=?,payload=?,updated_at=CURRENT_TIMESTAMP WHERE chat_id=?",
                     (next_step, json.dumps(payload, ensure_ascii=False), chat_id))
         con.commit()
     await telegram_send(str(chat_id), next_prompt or "Спасибо! Заявка получена.")
